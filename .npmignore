@@ -1,0 +1,9 @@
+src/
+.github/
+.env
+.env.example
+tsconfig.json
+*.tsbuildinfo
+.DS_Store
+coverage/
+.turbo/

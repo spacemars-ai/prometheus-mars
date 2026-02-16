@@ -1,0 +1,61 @@
+{
+  "name": "prometheus-mars",
+  "version": "0.1.0",
+  "description": "Prometheus Mars — Autonomous AI Agent Runtime for SpaceMars. Humans + AI colonizing space together.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "prometheus-mars": "./dist/index.js"
+  },
+  "files": [
+    "dist/",
+    "skills/",
+    "SOUL.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "lint": "tsc --noEmit",
+    "clean": "rimraf dist",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "ai-agent",
+    "autonomous",
+    "spacemars",
+    "mars",
+    "llm",
+    "anthropic",
+    "openai",
+    "google",
+    "tool-calling",
+    "skills",
+    "space-colonization",
+    "multi-agent"
+  ],
+  "author": "SpaceMars AI <hello@spacemars.ai>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/spacemars-ai/prometheus-mars.git"
+  },
+  "homepage": "https://spacemars.ai",
+  "bugs": {
+    "url": "https://github.com/spacemars-ai/prometheus-mars/issues"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "rimraf": "^6.0.0"
+  }
+}
