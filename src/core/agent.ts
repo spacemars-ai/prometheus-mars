@@ -2,18 +2,48 @@
 // Prometheus Agent Runtime
 // ============================================
 
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { PrometheusConfig } from "../config/config.js";
 import { SpaceMarsClient } from "../channels/spacemars-api.js";
 import { createLLMAdapter } from "./llm-adapter.js";
 import { startHeartbeat, stopHeartbeat } from "./heartbeat.js";
 import { TaskWorker } from "./task-worker.js";
 import { loadSkillsFromDir } from "./skill-loader.js";
+import { ToolExecutor } from "../tools/tool-executor.js";
+import { createFileReadTool } from "../tools/file-read.js";
+import { createFileWriteTool } from "../tools/file-write.js";
+import { createBashTool } from "../tools/bash-execute.js";
+import { createWebFetchTool } from "../tools/web-fetch.js";
+import { createWebSearchTool } from "../tools/web-search.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** Default pause between task-loop iterations (60 seconds). */
 const TASK_LOOP_INTERVAL_MS = 60_000;
 
 /** Pause after an error before retrying (2 minutes). */
 const ERROR_BACKOFF_MS = 120_000;
+
+function loadSoulPrompt(): string {
+  const soulPath = path.resolve(__dirname, "../../SOUL.md");
+  try {
+    return fs.readFileSync(soulPath, "utf-8");
+  } catch {
+    return "";
+  }
+}
+
+function createToolExecutor(workDir: string): ToolExecutor {
+  const executor = new ToolExecutor();
+  executor.register(createFileReadTool(workDir));
+  executor.register(createFileWriteTool(workDir));
+  executor.register(createBashTool(workDir));
+  executor.register(createWebFetchTool());
+  executor.register(createWebSearchTool());
+  return executor;
+}
 
 export class PrometheusAgent {
   private readonly client: SpaceMarsClient;
@@ -34,6 +64,23 @@ export class PrometheusAgent {
     );
 
     this.worker = new TaskWorker(this.client, llm);
+
+    // Set up tool executor
+    const workDir = process.cwd();
+    const toolExecutor = createToolExecutor(workDir);
+    this.worker.setToolExecutor(toolExecutor);
+
+    // Load SOUL.md
+    const soul = loadSoulPrompt();
+    if (soul) {
+      this.worker.setSoulPrompt(soul);
+      console.log("[Prometheus] SOUL.md loaded.");
+    }
+  }
+
+  /** Get the TaskWorker for direct task execution (used by CLI `run` command). */
+  getWorker(): TaskWorker {
+    return this.worker;
   }
 
   // --------------------------------------------------
@@ -106,18 +153,12 @@ export class PrometheusAgent {
     }
   }
 
-  /**
-   * Main loop: repeatedly fetch, claim, solve, and submit tasks.
-   * Runs until `stop()` is called.
-   */
   private async taskLoop(): Promise<void> {
     console.log("[Prometheus] Entering task loop.");
 
     while (this.running) {
       try {
         const didWork = await this.worker.runOnce();
-
-        // If no tasks were found or completed, wait longer before polling again
         const waitMs = didWork ? TASK_LOOP_INTERVAL_MS : TASK_LOOP_INTERVAL_MS * 2;
         await this.sleep(waitMs);
       } catch (err) {

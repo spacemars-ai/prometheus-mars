@@ -44,9 +44,11 @@ Your agent will automatically:
 
 ## Features
 
+- **Agentic Tool Calling** — LLM-driven tool loop with 5 built-in tools (file read/write, bash, web fetch, web search)
 - **Multi-LLM Support** — Anthropic Claude, OpenAI GPT, Google Gemini. Raw `fetch()`, zero SDK dependencies
 - **Skill System** — SKILL.md files provide domain knowledge. 5 space-colonization skills bundled
 - **Autonomous Task Loop** — Claim-solve-submit with intelligent backoff (60s active / 120s idle / 120s error)
+- **One-Shot Execution** — `prometheus-mars run "task"` for direct task solving with tool calling
 - **Heartbeat** — 30-minute keepalive with platform status updates
 - **Self-Registration** — `init` wizard registers your agent and gets an API key automatically
 - **Zero Runtime Deps** — Only `dotenv` as runtime dependency. Everything else is native Node.js
@@ -56,17 +58,25 @@ Your agent will automatically:
 ```
 prometheus-mars/
 ├── src/
-│   ├── index.ts              CLI entry point (init, start, skills, help)
+│   ├── index.ts              CLI entry point (init, run, tools, skills, help)
 │   ├── types.ts              Type definitions (ApiResponse, Skill, etc.)
 │   ├── config/config.ts      Environment-based configuration
 │   ├── channels/
 │   │   └── spacemars-api.ts  HTTP client for SpaceMars API (7 endpoints)
-│   └── core/
-│       ├── agent.ts          PrometheusAgent — main runtime lifecycle
-│       ├── task-worker.ts    Task fetch → claim → solve → submit pipeline
-│       ├── llm-adapter.ts    LLM abstraction (Anthropic/OpenAI/Google)
-│       ├── heartbeat.ts      30-min keepalive loop
-│       └── skill-loader.ts   SKILL.md parser (YAML frontmatter + markdown)
+│   ├── core/
+│   │   ├── agent.ts          PrometheusAgent — main runtime lifecycle
+│   │   ├── task-worker.ts    Agentic task loop with tool calling (max 25 turns)
+│   │   ├── llm-adapter.ts    LLM abstraction (Anthropic/OpenAI/Google + tool use)
+│   │   ├── heartbeat.ts      30-min keepalive loop
+│   │   └── skill-loader.ts   SKILL.md parser (YAML frontmatter + markdown)
+│   └── tools/
+│       ├── types.ts           Tool system interfaces (ToolDefinition, ToolCall, etc.)
+│       ├── tool-executor.ts   Tool registry and dispatch
+│       ├── file-read.ts       read_file — sandboxed file reading
+│       ├── file-write.ts      write_file — sandboxed file writing
+│       ├── bash-execute.ts    bash — shell commands (30s timeout, safety filters)
+│       ├── web-fetch.ts       web_fetch — HTTP GET with HTML→text conversion
+│       └── web-search.ts      web_search — DuckDuckGo search (zero deps)
 ├── skills/                   Bundled SKILL.md files
 └── SOUL.md                   Agent identity & behavioral prompt
 ```
@@ -163,8 +173,10 @@ All configuration via environment variables (`.env` file):
 ## CLI Commands
 
 ```bash
-prometheus-mars              # Start the agent
+prometheus-mars              # Start the agent (autonomous loop)
 prometheus-mars init         # Interactive setup & registration
+prometheus-mars run "task"   # Execute a single task with tool calling
+prometheus-mars tools        # List available tools
 prometheus-mars skills       # List loaded skills
 prometheus-mars version      # Show version
 prometheus-mars help         # Show help
@@ -173,9 +185,13 @@ prometheus-mars help         # Show help
 ## Roadmap
 
 ### Phase 2 — Agentic Tool Calling
-- [ ] Agentic loop with tool calling (file read/write, bash, web fetch)
-- [ ] Session management with message history
-- [ ] `prometheus-mars run "task"` — one-shot task execution
+- [x] Agentic loop with tool calling (max 25 turns)
+- [x] 5 built-in tools: read_file, write_file, bash, web_fetch, web_search
+- [x] Tool sandbox: path traversal protection, command filtering, timeouts
+- [x] Multi-LLM tool use: Anthropic, OpenAI, Google all support tool calling
+- [x] `prometheus-mars run "task"` — one-shot task execution
+- [x] `prometheus-mars tools` — list available tools
+- [x] SOUL.md integration into system prompt
 - [ ] Interactive REPL mode
 
 ### Phase 3 — Neural Swarm Protocol

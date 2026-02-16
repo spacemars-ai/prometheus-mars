@@ -12,6 +12,12 @@ import { loadConfig } from "./config/config.js";
 import { SpaceMarsClient } from "./channels/spacemars-api.js";
 import { PrometheusAgent } from "./core/agent.js";
 import { loadSkillsFromDir } from "./core/skill-loader.js";
+import { ToolExecutor } from "./tools/tool-executor.js";
+import { createFileReadTool } from "./tools/file-read.js";
+import { createFileWriteTool } from "./tools/file-write.js";
+import { createBashTool } from "./tools/bash-execute.js";
+import { createWebFetchTool } from "./tools/web-fetch.js";
+import { createWebSearchTool } from "./tools/web-search.js";
 
 // ---- Package info ----
 
@@ -118,7 +124,6 @@ async function runInit(): Promise<void> {
       "LLM model (default: claude-sonnet-4-5-20250929): ",
     )) || "claude-sonnet-4-5-20250929";
 
-  // Build .env content
   const envLines = [
     `# Prometheus Mars Agent Configuration`,
     `# Generated on ${new Date().toISOString()}`,
@@ -164,12 +169,69 @@ function runSkills(): void {
   }
 }
 
+// ---- Tools command ----
+
+function runTools(): void {
+  printBanner();
+
+  const workDir = process.cwd();
+  const executor = new ToolExecutor();
+  executor.register(createFileReadTool(workDir));
+  executor.register(createFileWriteTool(workDir));
+  executor.register(createBashTool(workDir));
+  executor.register(createWebFetchTool());
+  executor.register(createWebSearchTool());
+
+  const defs = executor.getDefinitions();
+
+  console.log(`Available tools (${defs.length}):\n`);
+  for (const tool of defs) {
+    console.log(`  ${tool.name}`);
+    console.log(`    ${tool.description}`);
+    const params = Object.keys(tool.input_schema.properties || {});
+    if (params.length > 0) {
+      console.log(`    Parameters: ${params.join(", ")}`);
+    }
+    console.log();
+  }
+}
+
+// ---- Run command ----
+
+async function runTask(taskDescription: string): Promise<void> {
+  dotenvConfig();
+  printBanner();
+
+  const config = loadConfig();
+
+  if (!config.llmApiKey) {
+    console.error(
+      '[Prometheus] No LLM_API_KEY found.\n' +
+        'Run "prometheus-mars init" to set up, or add LLM_API_KEY to your .env file.\n',
+    );
+    process.exit(1);
+  }
+
+  console.log(`[Prometheus] Running task: "${taskDescription}"\n`);
+
+  const agent = new PrometheusAgent(config);
+
+  // Load skills
+  const skills = loadSkillsFromDir(config.skillsDir);
+  agent.getWorker().setSkills(skills);
+
+  const result = await agent.getWorker().solveDirectTask(taskDescription);
+
+  console.log("\n" + "=".repeat(60));
+  console.log("RESULT:");
+  console.log("=".repeat(60));
+  console.log(result);
+}
+
 // ---- Default: run the agent ----
 
 async function runAgent(): Promise<void> {
-  // Load .env from the current working directory
   dotenvConfig();
-
   printBanner();
 
   const config = loadConfig();
@@ -184,7 +246,6 @@ async function runAgent(): Promise<void> {
 
   const agent = new PrometheusAgent(config);
 
-  // Graceful shutdown on SIGINT / SIGTERM
   const shutdown = () => {
     agent.stop();
     process.exit(0);
@@ -210,6 +271,20 @@ async function main(): Promise<void> {
       runSkills();
       break;
 
+    case "tools":
+      runTools();
+      break;
+
+    case "run": {
+      const taskDesc = args.slice(1).join(" ");
+      if (!taskDesc) {
+        console.error('Usage: prometheus-mars run "task description"');
+        process.exit(1);
+      }
+      await runTask(taskDesc);
+      break;
+    }
+
     case "version":
     case "--version":
     case "-v":
@@ -221,11 +296,13 @@ async function main(): Promise<void> {
     case "-h":
       printBanner();
       console.log("Usage:");
-      console.log("  prometheus-mars          Start the agent");
-      console.log("  prometheus-mars init     Interactive setup & registration");
-      console.log("  prometheus-mars skills   List loaded skills");
-      console.log("  prometheus-mars version  Show version");
-      console.log("  prometheus-mars help     Show this help message");
+      console.log("  prometheus-mars              Start the agent (autonomous loop)");
+      console.log("  prometheus-mars init         Interactive setup & registration");
+      console.log('  prometheus-mars run "task"   Execute a single task with tool calling');
+      console.log("  prometheus-mars skills       List loaded skills");
+      console.log("  prometheus-mars tools        List available tools");
+      console.log("  prometheus-mars version      Show version");
+      console.log("  prometheus-mars help         Show this help message");
       console.log();
       break;
 

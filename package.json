@@ -1,6 +1,6 @@
 {
   "name": "prometheus-mars",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Prometheus Mars — Autonomous AI Agent Runtime for SpaceMars. Humans + AI colonizing space together.",
   "type": "module",
   "main": "./dist/index.js",
